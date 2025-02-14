@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONFIG_FILE="/home/esteban/config_vms.conf"
+CONFIG_FILE="/home/esteban/Documents/GitHub/config_vms.conf"
 DISK_DIR="/home/esteban/Documents/KVM" 
 
 # Vérifier si le fichier de configuration existe
@@ -9,23 +9,19 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-sed -i 's/  */ /g' "$CONFIG_FILE"
-
 # Lire et traiter chaque ligne du fichier de configuration
-while IFS=' ' read -r VM_SOURCE VM_TARGET_PREFIX N_CLONES NETWORK RAM VCPU OS_VARIANT; do 
-    echo "DEBUG: Champs séparés -> '${VM_SOURCE}' | '${VM_TARGET_PREFIX}' | '${N_CLONES}' | '${NETWORK}' | '${RAM}' | '${VCPU}' | '${OS_VARIANT}'"
-
-    
-    if [ -z "$VM_SOURCE" ] || [ -z "$VM_TARGET_PREFIX" ] || [ -z "$N_CLONES" ] || [ -z "$NETWORK" ] || [ -z "$RAM" ] || [ -z "$VCPU" ] || [ -z "$OS_VARIANT" ]; then
-        echo "❌ Erreur : Une ou plusieurs valeurs sont vides dans cette ligne."
-        continue
-    fi
-
+while IFS=' ' read -r VM_SOURCE VM_TARGET_PREFIX N_CLONES NETWORK RAM VCPU OS_VARIANT; do
     # Ignorer les lignes vides ou celles qui commencent par #
-    if [[ -z "$VM_SOURCE" || "$VM_SOURCE" =~ ^# || "$VM_SOURCE" == "VM_SOURCE" ]]; then
-		continue
-    fi
+    [[ -z "$VM_SOURCE" || "$VM_SOURCE" =~ ^# ]] && continue
 
+    # Nettoyer les variables
+    VM_SOURCE=$(echo "$VM_SOURCE" | tr -d '[:space:]')
+    VM_TARGET_PREFIX=$(echo "$VM_TARGET_PREFIX" | tr -d '[:space:]')
+    N_CLONES=$(echo "$N_CLONES" | tr -d '[:space:]')
+    NETWORK=$(echo "$NETWORK" | tr -d '[:space:]')
+    RAM=$(echo "$RAM" | tr -d '[:space:]')
+    VCPU=$(echo "$VCPU" | tr -d '[:space:]')
+    OS_VARIANT=$(echo "$OS_VARIANT" | tr -d '[:space:]')
 
     echo "🚀 Clonage de $VM_SOURCE avec préfixe $VM_TARGET_PREFIX ($N_CLONES clones)"
     echo "➡️  Réseau : $NETWORK | RAM : ${RAM}MB | vCPU : ${VCPU} | OS : ${OS_VARIANT}"
@@ -53,7 +49,7 @@ while IFS=' ' read -r VM_SOURCE VM_TARGET_PREFIX N_CLONES NETWORK RAM VCPU OS_VA
         # Copier l’image disque
         cp "$DISK_SOURCE" "$DISK_TARGET"
 
-        # Créer la nouvelle VM avec `virt-install`
+        # Créer la nouvelle VM avec `virt-install` (désactivation de la console graphique)
         virt-install --name "$VM_TARGET" \
             --ram "$RAM" \
             --vcpus "$VCPU" \
@@ -62,7 +58,7 @@ while IFS=' ' read -r VM_SOURCE VM_TARGET_PREFIX N_CLONES NETWORK RAM VCPU OS_VA
             --os-variant "$OS_VARIANT" \
             --graphics none \
             --import \
-            --noautoconsole
+            --noautoconsole  # ✅ Empêche l'affichage de la console graphique
 
         # Vérifier si le clonage a réussi
         if [ $? -eq 0 ]; then
@@ -72,11 +68,11 @@ while IFS=' ' read -r VM_SOURCE VM_TARGET_PREFIX N_CLONES NETWORK RAM VCPU OS_VA
             continue
         fi
 
-        # 🚀 Démarrer la VM
+        # Démarrer la VM
         virsh start "$VM_TARGET"
         echo "✅ $VM_TARGET a été démarré avec succès."
 
-        # 🔧 Attacher l'interface réseau après le démarrage
+        # Attacher l'interface réseau après le démarrage
         sleep 5  # Attendre 5 secondes pour s'assurer que la VM est bien lancée
         virsh attach-interface --domain "$VM_TARGET" --type network --source "$NETWORK" --config --live
 
